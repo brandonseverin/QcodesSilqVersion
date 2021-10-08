@@ -52,6 +52,32 @@ class NumpyJSONEncoder(json.JSONEncoder):
             return s
 
 
+def scale_engineering_units(vals):
+    maxval = np.nanmax(vals)
+
+    # allow values up to a <1000. i.e. nV is used up to 1000 nV
+    prefixes = ['a', 'f', 'p', 'n', 'μ', 'm', '', 'k', 'M',
+                'G', 'T', 'P', 'E']
+    thresholds = [10 ** (-3 * 5 + 3 * n) for n in
+                  range(len(prefixes))]
+    scales = [10 ** (3 * 6 - 3 * n) for n in
+              range(len(prefixes))]
+
+    scale = 1
+    for prefix, threshold, trialscale in zip(prefixes,
+                                             thresholds,
+                                             scales):
+        if maxval < threshold:
+            scale = trialscale
+            new_prefix = prefix
+            break
+
+    # special case the largest
+    if maxval > thresholds[-1]:
+        scale = scales[-1]
+
+    return scale * vals, new_prefix
+
 def tprint(string, dt=1, tag='default'):
     """ Print progress of a loop every dt seconds """
     ptime = _tprint_times.get(tag, 0)
