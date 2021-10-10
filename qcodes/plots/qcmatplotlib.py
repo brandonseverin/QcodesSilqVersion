@@ -45,6 +45,42 @@ def align_y_axis(ax, ax_target):
     ax.set_position([posn_old.x0, posn_target.y0, posn_old.width, posn_target.height])
 
 
+def add_2D_traces(
+        self,
+        z,
+        clim=None,
+):
+    if clim is None:
+        clim = np.nanmin(z), np.nanmax(z)
+
+    if isinstance(z, DataArray):
+        y_vals = z.set_arrays[0]
+    else:
+        y_vals = np.arange(len(z))
+    y_diff_vals = np.diff(y_vals)
+    y_diff_vals = np.append(y_diff_vals, y_diff_vals[-1])
+
+    for k, row in enumerate(z):
+        if all(np.isnan(row)):
+            continue
+
+        # Determine x and y values for each row
+        x = row.set_arrays[0]
+        x = np.append(x - np.diff(x)[0] / 2, x[-1] + np.diff(x)[0] / 2)
+        # The two y values are the sweep value +- half the difference to next sweep value
+        y_diff = next(elem for elem in y_diff_vals[k::-1] if not np.isnan(elem))
+        y = [y_vals[k] - y_diff / 2, y_vals[k] + y_diff / 2]
+
+        x[np.isnan(x)] = np.nanmax(x)
+        y = masked_invalid(y)
+        row = masked_invalid(row[np.newaxis, :])
+
+        # Plot row
+        mesh = self.pcolormesh(x, y, row, clim=clim)
+
+    fig = self.get_figure()
+    self.colorbar = self.qcodes_colorbar = fig.colorbar(mesh, ax=self)
+
 def set_zscale(self, scale: str):
     """Set the qcodes_colorbar scaling
 
@@ -119,6 +155,11 @@ class MatPlot(BasePlot):
             specifies the index of the matplotlib figure window to use. If None
             then open a new window
 
+        remove_empty_subplots: boolean
+            If True, after creating a figure with subplots, any subplots that
+            are empty are removed. This is not recommended for interactive data
+            viewing, but might be desirable to remove visual clutter.
+
         **kwargs: passed along to MatPlot.add() to add the first data trace
     """
 
@@ -128,7 +169,7 @@ class MatPlot(BasePlot):
 
     def __init__(self, *args, figsize=None, interval=1, subplots=None, num=None,
                  colorbar=True, sharex=False, sharey=False, gridspec_kw=None,
-                 actions=[], **kwargs):
+                 actions=[], remove_empty_subplots=False, **kwargs):
         super().__init__(interval)
 
         if subplots is None:
@@ -151,6 +192,11 @@ class MatPlot(BasePlot):
                 self[k].add(arg, colorbar=colorbar, **kwargs)
         if args:
             self.rescale_axis()
+
+        if remove_empty_subplots:
+            for ax in self:
+                if not ax.collections and not ax.lines:
+                    ax.remove()
 
         self.tight_layout()
         if any(any(map(_is_active_data_array, arg))
@@ -224,6 +270,7 @@ class MatPlot(BasePlot):
             subplot.add = partial(self.add, subplot=k + 1)
             subplot.align_x_axis = partial(align_x_axis, subplot)
             subplot.align_y_axis = partial(align_y_axis, subplot)
+            subplot.add_2D_traces = partial(add_2D_traces, subplot)
 
         self.title = self.fig.suptitle('')
 
@@ -388,12 +435,12 @@ class MatPlot(BasePlot):
                         ax.dataLim = bbox
                 ax.autoscale()
 
-        self.rescale_axis()
         # Set internal flag to ensure that the full figure is redrawn.
         # If unset, calling canvas.draw from a separate thread may not draw
         # all components
         self.fig.canvas._force_full = True
         self.fig.canvas.draw()
+        self.rescale_axis()
 
     def _draw_plot(self, ax, y, x=None, fmt=None, subplot=1,
                    xlabel=None,
@@ -537,8 +584,7 @@ class MatPlot(BasePlot):
             ax.locator_params(nbins=nticks)
 
         if getattr(ax, 'qcodes_colorbar', None):
-            # update_normal doesn't seem to work...
-            ax.qcodes_colorbar.update_bruteforce(pc)
+            ax.qcodes_colorbar.update_normal(pc)
         elif colorbar:
             ax.colorbar = ax.qcodes_colorbar = self.fig.colorbar(pc, ax=ax)
 

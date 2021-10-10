@@ -226,7 +226,10 @@ class DataSet(DelegateAttributes):
             # Unique data array found, ignore data_group
             return self.arrays[key]
         else:
-            return self.get_array(key, data_group=data_group)
+            try:
+                return self.get_array(key)
+            except RuntimeError as e:
+                return self.get_array(key, set_arrays=True)
 
     def _ipython_key_completions_(self):
         """Tab completion for IPython, i.e. the data arrays """
