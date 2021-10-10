@@ -714,7 +714,7 @@ class DataSet(DelegateAttributes):
             else:
                 valid_idxs = [
                     tuple(key) for key, val in self.metadata['data_groups']
-                    if data_group in val
+                    if data_group == val
                 ]
                 if not valid_idxs:
                     warn(f'Data group {data_group} not found in metadata')
