@@ -10,7 +10,7 @@ import sys
 from contextlib import contextmanager
 from typing import List
 
-from collections import Iterator, Sequence, Mapping, Union
+from collections import Iterator, Sequence, Mapping
 from copy import deepcopy
 from blinker import Signal
 
@@ -52,19 +52,18 @@ class NumpyJSONEncoder(json.JSONEncoder):
             return s
 
 
-def scale_engineering_units(vals: Union[list, np.ndarray], unit: str = None):
+def get_engineering_scale(val: float, unit: str = None):
     """
 
     Args:
-        vals: An array-like collection of values to scale.
+        val: The floating-point value to scale.
         unit: Optional unit of measurement, if provided the unit will be
               returned with the engineering prefix.
               If not provided, only the prefix is returned.
     Returns:
-        scaled_vals, new_unit
+        scale, new_unit
 
     """
-    maxval = np.nanmax(vals)
 
     # allow values up to a <1000. i.e. nV is used up to 1000 nV
     prefixes = ['a', 'f', 'p', 'n', 'μ', 'm', '', 'k', 'M',
@@ -75,16 +74,14 @@ def scale_engineering_units(vals: Union[list, np.ndarray], unit: str = None):
               range(len(prefixes))]
 
     scale = 1
-    for prefix, threshold, trialscale in zip(prefixes,
-                                             thresholds,
-                                             scales):
-        if maxval < threshold:
+    for prefix, threshold, trialscale in zip(prefixes, thresholds, scales):
+        if val < threshold:
             scale = trialscale
             new_prefix = prefix
             break
 
     # special case the largest
-    if maxval > thresholds[-1]:
+    if val > thresholds[-1]:
         scale = scales[-1]
         new_prefix = prefixes[-1]
 
@@ -93,7 +90,7 @@ def scale_engineering_units(vals: Union[list, np.ndarray], unit: str = None):
     else:
         new_unit = new_prefix
 
-    return scale * vals, new_unit
+    return scale, new_unit
 
 def tprint(string, dt=1, tag='default'):
     """ Print progress of a loop every dt seconds """
