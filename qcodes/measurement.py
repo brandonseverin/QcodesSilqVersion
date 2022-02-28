@@ -57,6 +57,8 @@ class Measurement:
     except_actions = []
     max_arrays = 100
 
+    _t_start = None
+
     # Notification function, called if notify=True.
     # Function should receive the following arguments:
     # Measurement object, exception_type, exception_message, traceback
@@ -313,7 +315,7 @@ class Measurement:
                     "measurement_cell": measurement_cell,
                     "measurement_code": measurement_code,
                     "last_input_cells": get_last_input_cells(20),
-                    "t_start": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    "t_start": self._t_start.strftime('%Y-%m-%d %H:%M:%S')
                 }
             )
 
@@ -776,6 +778,7 @@ class Measurement:
         *,  # Everything after here must be a kwarg
         label=None,
         unit=None,
+        timestamp=False,
         **kwargs,
     ):
         """Perform a single measurement of a Parameter, function, etc.
@@ -795,6 +798,8 @@ class Measurement:
                 Otherwise, the default name is used.
             label: Optional label, is ignored if measurable is a Parameter or callable
             unit: Optional unit, is ignored if measurable is a Parameter or callable
+            timestamp: If True, the timestamps immediately before and after this
+                       measurement are recorded
 
         Returns:
             Return value of measurable
@@ -830,6 +835,16 @@ class Measurement:
         t0 = perf_counter()
         initial_action_indices = self.action_indices
 
+        if timestamp:
+            t_now = datetime.now()
+
+            # Store time referenced to t_start
+            self.measure((t_now - self._t_start).total_seconds(),
+                         'T_pre', unit='s', timestamp=False)
+            self.skip()  # Increment last action index by 1
+
+
+
         # TODO Incorporate kwargs name, label, and unit, into each of these
         if isinstance(measurable, Parameter):
             result = self._measure_parameter(
@@ -850,6 +865,15 @@ class Measurement:
                 f"Cannot measure {measurable} as it cannot be called, and it "
                 f"is not a dict, int, float, bool, or numpy array."
             )
+
+        if timestamp:
+            t_now = datetime.now()
+
+            # Store time referenced to t_start
+            self.measure((t_now - self._t_start).total_seconds(),
+                         'T_post', unit='s', timestamp=False)
+            self.skip()  # Increment last action index by 1
+
 
         self.timings.record(
             ['measurement', initial_action_indices, 'total'],
