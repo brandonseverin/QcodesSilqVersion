@@ -310,6 +310,7 @@ class Measurement:
             if measurement_code.startswith(init_string):
                 measurement_code = measurement_code[len(init_string) + 1 : -4]
 
+            self._t_start = datetime.now()
             dataset.add_metadata(
                 {
                     "measurement_cell": measurement_cell,
