@@ -50,12 +50,11 @@ class DigitizerChannel(InstrumentChannel):
         id: channel id (e.g. 1)
         **kwargs: Additional kwargs passed to InstrumentChannel
     """
-    def __init__(self, parent: Instrument, name: str, id: int, zero_based: bool, **kwargs):
+    def __init__(self, parent: Instrument, name: str, id: int, **kwargs):
         super().__init__(parent=parent, name=name, **kwargs)
 
         self.SD_AIN = self._parent.SD_AIN
         self.id = id
-        self.id_zero_based = id if zero_based else id - 1
 
         # For channelInputConfig
         self.add_parameter(
@@ -245,7 +244,6 @@ class DigitizerChannel(InstrumentChannel):
         Raises:
             AssertionError if DAQstart was unsuccessful
         """
-#        print(f"self.id: {self.id}")
         return self.SD_AIN.DAQstart(self.id)
 
     @with_error_check
@@ -301,8 +299,8 @@ class DigitizerChannel(InstrumentChannel):
         """
         return self.SD_AIN.DAQtrigger(self.id)
 
-model_channel_idxs = {'M3300A_legacy': [k for k in range(7)],
-                      'M3300A': [k+1 for k in range(8)]}
+model_channel_idxs = {'M3300A_legacy': [k+1 for k in range(7)],
+                      'M3300A': [k+1 for k in range(7)]}
 
 
 class SD_DIG(SD_Module):
@@ -328,10 +326,14 @@ class SD_DIG(SD_Module):
                  model: str,
                  chassis: int,
                  slot: int,
+                 channels: int = None,
                  channel_idxs: List[int] = None,
                  triggers: int = 8,
                  **kwargs):
         super().__init__(name, model, chassis, slot, triggers, **kwargs)
+
+        if channels is None:
+            channels = model_channels[self.model]
         
         if channel_idxs is None:
             channel_idxs = model_channel_idxs[self.model]
@@ -344,6 +346,9 @@ class SD_DIG(SD_Module):
         # We wrap it in a logclass so that any method call is recorded in
         # self.SD_AIN._method_calls
         self.SD_AIN = logclass(keysightSD1.SD_AIN)()
+
+        # store card-specifics
+        self.n_channels = channels
 
         # Open the device, using the specified chassis and slot number
         self.initialize(chassis=chassis, slot=slot)
@@ -389,9 +394,8 @@ class SD_DIG(SD_Module):
         channels = ChannelList(self,
                                     name='channels',
                                     chan_type=DigitizerChannel)
-        # Channel.id_zero_based needs to know whether channels idxs are zero-based
-        for ch in self.channel_idxs:
-            channel = DigitizerChannel(self, name=f'ch{ch}', id=ch, zero_based=self.zero_based_channels)
+        for ch in range(self.n_channels):
+            channel = DigitizerChannel(self, name=f'ch{ch}', id=ch)
             setattr(self, f'ch{ch}', channel)
             channels.append(channel)
 
@@ -437,10 +441,7 @@ class SD_DIG(SD_Module):
 
         """
         # DAQ channel mask, where LSB is for DAQ_0, bit 1 is for DAQ_1 etc.
-        if not self.zero_based_channels:
-            channels = [ch for ch in channels]
         channel_mask = sum(2**channel for channel in channels)
-#        print("Channel mask", channel_mask)
         return self.SD_AIN.DAQstartMultiple(channel_mask)
 
     @with_error_check
@@ -454,12 +455,7 @@ class SD_DIG(SD_Module):
             AssertionError if DAQstopMultiple was unsuccessful
         """
         # DAQ channel mask, where LSB is for DAQ_0, bit 1 is for DAQ_1 etc.
-#        print(f":Stop channels: channels: {channels}")
-        if not self.zero_based_channels:
-#            print("Not zero based, decreasing index")
-            channels = [ch for ch in channels]
         channel_mask = sum(2**channel for channel in channels)
-#        print("Channel mask stop:", channel_mask)
         return self.SD_AIN.DAQstopMultiple(channel_mask)
 
     @with_error_check
@@ -474,8 +470,6 @@ class SD_DIG(SD_Module):
         """
 
         # DAQ channel mask, where LSB is for DAQ_0, bit 1 is for DAQ_1 etc.
-        if not self.zero_based_channels:
-            channels = [ch for ch in channels]
         channel_mask = sum(2**channel for channel in channels)
         return self.SD_AIN.DAQtriggerMultiple(channel_mask)
 
@@ -490,8 +484,6 @@ class SD_DIG(SD_Module):
             AssertionError if DAQflushMultiple was unsuccessful
         """
         # DAQ channel mask, where LSB is for DAQ_0, bit 1 is for DAQ_1 etc.
-        if not self.zero_based_channels:
-            channels = [ch for ch in channels]
         channel_mask = sum(2**channel for channel in channels)
         return self.SD_AIN.DAQflushMultiple(channel_mask)
 

@@ -7,12 +7,8 @@ from qcodes.instrument.base import Instrument
 from qcodes.instrument.channel import InstrumentChannel, ChannelList
 from qcodes import validators as vals
 from .SD_DIG import logclass
-model_channel_idxs = {'M3201A': [k+1 for k in range(4)],
-                      'M3202A': [k+1 for k in range(4)],
-                      'M3300A': [k+1 for k in range(4)],
-                      'M3201A_legacy': [k for k in range(4)],
-                      'M3300A_legacy': [k for k in range(4)],
-                      }
+model_channel_idxs = {'M3201A': [0,1,2,3],
+                      'M3300A': [0,1,2,3]}
 
 
 class AWGChannel(InstrumentChannel):
@@ -25,31 +21,31 @@ class AWGChannel(InstrumentChannel):
 
         # TODO: Joint amplitude and offset validation (-1.5<amp+offset<1.5)
         self.add_parameter('amplitude',
-                           label=f'{self.name} amplitude',
+                           label=f'ch{self.id} amplitude',
                            unit='V',
                            set_function=self.awg.channelAmplitude,
-                           docstring=f'{self.name} amplitude',
+                           docstring=f'ch{self.id} amplitude',
                            vals=vals.Numbers(-1.5, 1.5))
         self.add_parameter('offset',
-                           label=f'{self.name} offset',
+                           label=f'ch{self.id} offset',
                            unit='V',
                            set_function=self.awg.channelOffset,
-                           docstring=f'The DC offset of {self.name}',
+                           docstring=f'The DC offset of ch{self.id}',
                            vals=vals.Numbers(-1.5, 1.5))
 
         self.add_parameter('wave_shape',
-                           label=f'{self.name} wave shape',
+                           label=f'ch{self.id} wave shape',
                            initial_value='arbitrary',
                            set_function=self.awg.channelWaveShape,
                            val_mapping={'HiZ': -1, 'none': 0, 'sinusoidal': 1,
                                         'triangular': 2, 'square': 4, 'dc': 5,
                                         'arbitrary': 6, 'partner_channel': 8},
-                           docstring=f'The output waveform type of {self.name}. '
+                           docstring=f'The output waveform type of ch{self.id}. '
                                      f'Can be either arbitrary (AWG), or one '
                                      f'of the function generator types.')
 
         self.add_parameter('trigger_source',
-                           label=f'{self.name} trigger source',
+                           label=f'ch{self.id} trigger source',
                            val_mapping={'trig_in': 0,
                                         **{f'pxi{k}': 4000+k for k in range(8)}},
                            initial_value='trig_in',
@@ -62,7 +58,7 @@ class AWGChannel(InstrumentChannel):
                                      'trigger_direction == "in".')
 
         self.add_parameter('trigger_mode',
-                           label=f'{self.name} trigger mode',
+                           label=f'ch{self.id} trigger mode',
                            initial_value='rising',
                            val_mapping={'active_high': 1, 'active_low': 2,
                                         'rising': 3, 'falling': 4},
@@ -78,46 +74,46 @@ class AWGChannel(InstrumentChannel):
                            val_mapping={'one-shot': 0, 'cyclic': 1})
 
         # Function generator parameters
-        self.add_parameter('frequency',
-                           label=f'{self.name} frequency',
+        self.add_parameter(f'frequency',
+                           label=f'ch{self.id} frequency',
                            unit='Hz',
                            set_function=self.awg.channelFrequency,
-                           docstring=f'The frequency of {self.name}, only used '
+                           docstring=f'The frequency of ch{self.id}, only used '
                                      f'for the function generator (wave_shape '
                                      f'is not arbitrary).',
                            vals=vals.Numbers(0, 200e6))
-        self.add_parameter('phase',
-                           label=f'{self.name} phase',
+        self.add_parameter(f'phase',
+                           label=f'ch{self.id} phase',
                            unit='deg',
                            set_function=self.awg.channelPhase,
-                           docstring=f'The phase of {self.name}, only used '
+                           docstring=f'The phase of ch{self.id}, only used '
                                      f'for the function generator (wave_shape '
                                      f'is not arbitrary).',
                            vals=vals.Numbers(0, 360))
-        self.add_parameter('IQ',
-                           label=f'{self.name} IQ modulation',
+        self.add_parameter(f'IQ',
+                           label=f'ch{self.id} IQ modulation',
                            val_mapping={'on': 1, 'off': 0},
                            set_function=self.awg.modulationIQconfig,
                            docstring=f'Enable or disable IQ modulation for '
-                                     f'{self.name}. If enabled, IQ modulation '
+                                     f'ch{self.id}. If enabled, IQ modulation '
                                      f'will be applied to the function '
                                      f'generator signal using the AWG.')
-        self.add_parameter('angle_modulation',
-                           label=f'{self.name} angle modulation',
+        self.add_parameter(f'angle_modulation',
+                           label=f'ch{self.id} angle modulation',
                            val_mapping={'none': 0, 'frequency': 1, 'phase': 2},
                            set_function=self.awg.modulationAngleConfig,
                            set_args=['angle_modulation', 'deviation_gain'],
                            docstring=f'Type of modulation to use for the '
                                      f'function generator. Can be frequency or '
                                      f'phase.')
-        self.add_parameter('deviation_gain',
-                           label=f'{self.name} angle modulation',
+        self.add_parameter(f'deviation_gain',
+                           label=f'ch{self.id} angle modulation',
                            vals=vals.Numbers(),
                            set_function=self.awg.modulationAngleConfig,
                            initial_value=0,
                            set_args=['angle_modulation', 'deviation_gain'],
-                           docstring='Function generator modulation gain.'
-                                     'To be used with angle_modulation')
+                           docstring=f'Function generator modulation gain.'
+                                     f'To be used with angle_modulation')
 
     @with_error_check
     def config_angle_modulation(self,
@@ -358,6 +354,7 @@ class SD_AWG(SD_Module):
     This driver makes use of the Python library provided by Keysight as part of
     the SD1 Software package (v.2.01.00).
 
+
     # General information about AWG behaviour
 
     AWG behaviour:
@@ -424,7 +421,7 @@ class SD_AWG(SD_Module):
                            vals=vals.Enum(0, 1))
 
         self.add_parameter('trigger_direction',
-                           label='trigger direction',
+                           label=f'trigger direction',
                            val_mapping={'in': 1, 'out': 0},
                            set_function=self.awg.triggerIOconfig,
                            docstring='Determines if trig i/o should be used '
@@ -443,13 +440,6 @@ class SD_AWG(SD_Module):
                            unit='Hz',
                            get_function=self.awg.clockGetSyncFrequency,
                            docstring='The frequency of the internal CLKsync in Hz')
-
-        if model == 'M3202A':
-            self._max_sample_rate = int(1e9)
-            # self.clock_frequency(200e6)
-        else:
-            self._max_sample_rate = int(500e6)
-            # self.clock_frequency(100e6)
 
         channels = ChannelList(self,
                                name='channels',
@@ -484,7 +474,7 @@ class SD_AWG(SD_Module):
         assert isinstance(awg_name, str), \
             f"No SD_AWG found at chassis {chassis}, slot {slot}"
 
-        result_code = self.awg.openWithSlotCompatibility(awg_name, chassis, slot, compatibility=1)
+        result_code = self.awg.openWithSlot(awg_name, chassis, slot)
         assert result_code > 0, f'Could not open SD_AWG error code {result_code}'
 
     def off(self):
@@ -530,8 +520,6 @@ class SD_AWG(SD_Module):
             reset_multiple_channel_phase(5) would reset the phase of channel 0 and 2
         """
         # AWG channel mask, where LSB is for ch0, bit 1 is for ch1 etc.
-        if not self.zero_based_channels:
-            channels = [channel - 1 for channel in channels]
         channel_mask = sum(2**channel for channel in channels)
         return self.awg.channelPhaseResetMultiple(channel_mask)
 
@@ -655,8 +643,6 @@ class SD_AWG(SD_Module):
             channels: List of channels to start
         """
         # AWG channel mask, where LSB is for ch0, bit 1 is for ch1 etc.
-        if not self.zero_based_channels:
-            channels = [channel - 1 for channel in channels]
         channel_mask = sum(2**channel for channel in channels)
         self.awg.AWGstartMultiple(channel_mask)
 
@@ -669,8 +655,6 @@ class SD_AWG(SD_Module):
             channels: List of channels to pause
         """
         # AWG channel mask, where LSB is for ch0, bit 1 is for ch1 etc.
-        if not self.zero_based_channels:
-            channels = [channel - 1 for channel in channels]
         channel_mask = sum(2**channel for channel in channels)
         self.awg.AWGpauseMultiple(channel_mask)
 
@@ -682,8 +666,6 @@ class SD_AWG(SD_Module):
             channels: List of channels to resume
         """
         # AWG channel mask, where LSB is for ch0, bit 1 is for ch1 etc.
-        if not self.zero_based_channels:
-            channels = [channel - 1 for channel in channels]
         channel_mask = sum(2**channel for channel in channels)
         self.awg.AWGresumeMultiple(channel_mask)
 
@@ -697,8 +679,6 @@ class SD_AWG(SD_Module):
             channels: List of channels to stop
         """
         # AWG channel mask, where LSB is for ch0, bit 1 is for ch1 etc.
-        if not self.zero_based_channels:
-            channels = [channel - 1 for channel in channels]
         channel_mask = sum(2**channel for channel in channels)
         self.awg.AWGstopMultiple(channel_mask)
 
@@ -709,11 +689,9 @@ class SD_AWG(SD_Module):
         provided it is configured with VI/HVI Trigger.
 
         Args:
-            channels: List of channels to trigger
+            channels: List of chnanels to trigger
         """
         # AWG channel mask, where LSB is for ch0, bit 1 is for ch1 etc.
-        if not self.zero_based_channels:
-            channels = [channel - 1 for channel in channels]
         channel_mask = sum(2**channel for channel in channels)
         self.awg.AWGtriggerMultiple(channel_mask)
 

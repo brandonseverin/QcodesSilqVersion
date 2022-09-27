@@ -100,7 +100,9 @@ class Triggered_Controller(AcquisitionController):
             'channel_selection',
             set_cmd=None,
             vals=vals.Lists(),
-            docstring='The list of channels on which to acquire data.'
+            docstring='The list of channels on which to acquire data. '
+                      'Note that newer models have 1-based channels, '
+                      'while older models are 0-based'
         )
 
         # Set_cmds are lambda to ensure current active_channels is used
@@ -210,7 +212,15 @@ class Triggered_Controller(AcquisitionController):
 
     @property
     def active_channels(self):
-        return self.digitizer.channels[self.channel_selection()]
+        # Note that channel_selection is either 1-based or 0-based
+        # try:
+        channels = self.channel_selection()
+        if not self.digitizer.zero_based_channels:
+            channels = [ch-1 for ch in channels]
+        return self.digitizer.channels[channels]
+        # except Exception as e:
+        #     print(e)
+        #     raise
 
     def set_trigger_channel(self, trigger_channel: str):
         """
@@ -233,6 +243,8 @@ class Triggered_Controller(AcquisitionController):
         else:  # Analog channel
             self.active_channels.trigger_mode('analog')
             trigger_id = int(trigger_channel[-1])
+            if not self.digitizer.zero_based_channels:
+                trigger_id -= 1
             self.active_channels.analog_trigger_mask(1 << trigger_id)
             # Explicitly save val to ensure trigger_edge and threshold work.
             self.trigger_channel._save_val(trigger_channel)
@@ -253,7 +265,7 @@ class Triggered_Controller(AcquisitionController):
         # scrambling of data between channels, and only getting data after
         # timeout interval passed, resulting in very slow acquisitions.
         for k, channel in enumerate(self.active_channels):
-            ch = channel.id-1
+            ch = channel.id
             acquired_traces = 0
             while acquired_traces < self.traces_per_acquisition():
                 traces_to_get = min(self.traces_per_read(),
@@ -264,14 +276,13 @@ class Triggered_Controller(AcquisitionController):
                 samples_to_get_even = samples_to_get + samples_to_get % 2
 
                 channel.n_points(samples_to_get_even)
-                logger.debug(f'Acquiring {samples_to_get} points from DAQ{ch}.')
+                logger.debug(f'Acquiring {samples_to_get} points from {channel.name}.')
 
                 t0 = time()
+
                 channel_data = []
                 while time() - t0 < self.timeout():
-                    channel.start()
                     channel_data_read = channel.read()
-                    #print("Channel", channel_data_read)
                     if len(channel_data_read):
                         channel_data = np.append(channel_data, channel_data_read)
                         # adjust next number of acquisition points
@@ -288,7 +299,7 @@ class Triggered_Controller(AcquisitionController):
                                        ' be increased.')
                 else:
                     raise RuntimeError(f'Failed to acquire {samples_to_get_even} samples, '
-                                       f'got {len(channel_data)} on ch{ch}. '
+                                       f'got {len(channel_data)} on {channel.name}. '
                                        f'Timeout {self.timeout():.3f}s')
 
                 channel_data = np.array(channel_data)
@@ -327,7 +338,7 @@ class Triggered_Controller(AcquisitionController):
             data = self.acquire()
         finally:
             self.is_acquiring = False
-#        print(data)
+
         return self.post_acquire(data)
 
     def pre_start_capture(self):

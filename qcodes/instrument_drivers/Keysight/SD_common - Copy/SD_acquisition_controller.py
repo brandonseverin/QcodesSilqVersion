@@ -241,7 +241,7 @@ class Triggered_Controller(AcquisitionController):
 
     def acquire(self):
         # Initialize record of acquisition times
-        self.acquisition_times = [[] for _ in self.channel_selection()]
+        self.acquisition_times = [[] for ch in self.channel_selection()]
         self.last_acquisition_time = time()
 
         self.buffers = {ch: np.zeros((self.traces_per_acquisition(),
@@ -253,7 +253,8 @@ class Triggered_Controller(AcquisitionController):
         # scrambling of data between channels, and only getting data after
         # timeout interval passed, resulting in very slow acquisitions.
         for k, channel in enumerate(self.active_channels):
-            ch = channel.id-1
+            ch = channel.id
+            print(ch)
             acquired_traces = 0
             while acquired_traces < self.traces_per_acquisition():
                 traces_to_get = min(self.traces_per_read(),
@@ -267,11 +268,11 @@ class Triggered_Controller(AcquisitionController):
                 logger.debug(f'Acquiring {samples_to_get} points from DAQ{ch}.')
 
                 t0 = time()
+                print(t0)
                 channel_data = []
                 while time() - t0 < self.timeout():
-                    channel.start()
                     channel_data_read = channel.read()
-                    #print("Channel", channel_data_read)
+                    print(channel_data_read)
                     if len(channel_data_read):
                         channel_data = np.append(channel_data, channel_data_read)
                         # adjust next number of acquisition points
@@ -327,7 +328,7 @@ class Triggered_Controller(AcquisitionController):
             data = self.acquire()
         finally:
             self.is_acquiring = False
-#        print(data)
+        print(data)
         return self.post_acquire(data)
 
     def pre_start_capture(self):
